@@ -79,7 +79,10 @@ async fn run(args: Args) -> crate::error::Result<()> {
 
         None => {
             // Send message to agent
-            let url = shared::url::AgentUrl::parse(&args.url)?;
+            let url_str = args.url.as_ref().ok_or_else(|| {
+                crate::error::Error::Url("URL is required when not using subcommands".to_string())
+            })?;
+            let url = shared::url::AgentUrl::parse(url_str)?;
             let message = args.message.clone().unwrap_or_default();
 
             let mut client = Client::new(&config)?;

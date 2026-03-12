@@ -12,16 +12,16 @@ use clap::{Parser, Subcommand};
 ///
 /// Examples:
 ///   apc agent://hotel.example.com "查询房间"
-///   apc --find "type=hotel AND location=Beijing"
+///   apc find "type=hotel AND location=Beijing"
 ///   apc agent://local/claude "hello"
-///   apc --capa agent://hotel.example.com
+///   apc capa agent://hotel.example.com
 #[derive(Parser, Debug)]
 #[command(name = "apc")]
 #[command(version, about, long_about = None)]
 pub struct Args {
     /// Agent URL (e.g., agent://hotel.example.com/booking)
     #[arg(value_name = "URL")]
-    pub url: String,
+    pub url: Option<String>,
 
     /// Message to send to the agent
     #[arg(value_name = "MESSAGE")]

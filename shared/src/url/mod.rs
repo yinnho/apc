@@ -101,13 +101,20 @@ impl AgentUrl {
         }
     }
 
-    /// Convert to TCP address
+    /// Convert to TCP address (first resolved)
     pub fn to_socket_addr(&self) -> Result<std::net::SocketAddr, std::io::Error> {
         use std::net::ToSocketAddrs;
         let addr = format!("{}:{}", self.host, self.port);
         addr.to_socket_addrs()?
             .next()
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "Could not resolve address"))
+    }
+
+    /// Get all resolved socket addresses
+    pub fn to_socket_addrs(&self) -> Result<Vec<std::net::SocketAddr>, std::io::Error> {
+        use std::net::ToSocketAddrs;
+        let addr = format!("{}:{}", self.host, self.port);
+        addr.to_socket_addrs().map(|iter| iter.collect())
     }
 }
 
