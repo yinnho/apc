@@ -15,9 +15,8 @@ use tokio_rustls::TlsConnector;
 use url::AgentUrl;
 
 static NEXT_ID: AtomicI64 = AtomicI64::new(1);
-const RPC_TIMEOUT: Duration = Duration::from_secs(120);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
-const SHORT_TIMEOUT: Duration = Duration::from_secs(30);
+const RPC_TIMEOUT: Duration = Duration::from_secs(120);
 
 fn next_id() -> i64 {
     NEXT_ID.fetch_add(1, Ordering::SeqCst)
@@ -28,7 +27,7 @@ fn next_id() -> i64 {
 #[derive(Parser)]
 #[command(name = "agc", about = "Agent protocol client — curl for agent://")]
 struct Cli {
-    /// agent:// URL (e.g. agent://id.relay.yinnho.cn/claude)
+    /// agent:// URL (e.g. agent://id.relay.example.com/claude)
     url: String,
 
     /// Message to send (use -- before message if it starts with -)
@@ -95,7 +94,7 @@ impl Connection {
             }
         };
 
-        // Relay handshake (only for relay URLs)
+        // Relay handshake
         if let Some(ref target) = parsed.relay_target {
             conn.send(json!({
                 "type": "connect",
@@ -145,7 +144,7 @@ impl Connection {
             if line.is_empty() {
                 continue;
             }
-            // Skip ping/pong heartbeats and other control messages
+            // Skip ping/pong heartbeats
             if let Ok(val) = serde_json::from_str::<Value>(&line) {
                 match val.get("type").and_then(|v| v.as_str()) {
                     Some("ping") | Some("pong") => continue,
@@ -157,56 +156,69 @@ impl Connection {
         }
     }
 
-    /// Send a JSON-RPC request and collect streaming response
-    async fn rpc(&mut self, method: &str, params: Value) -> anyhow::Result<Value> {
+    /// Send a prompt and collect streaming response
+    async fn prompt(&mut self, agent: Option<&str>, message: &str, token: Option<&str>, cwd: Option<&str>) -> anyhow::Result<Value> {
         let id = next_id();
+
+        let mut params = json!({
+            "message": message
+        });
+
+        if let Some(agent) = agent {
+            params["agent"] = json!(agent);
+        }
+        if let Some(token) = token {
+            params["token"] = json!(token);
+        }
+        if let Some(cwd) = cwd {
+            params["cwd"] = json!(cwd);
+        }
+
         self.send(json!({
             "jsonrpc": "2.0",
             "id": id,
-            "method": method,
+            "method": "prompt",
             "params": params
         }))
         .await?;
 
         let mut text_parts: Vec<String> = Vec::new();
-        let timeout = if method == "session/prompt" { RPC_TIMEOUT } else { SHORT_TIMEOUT };
 
         loop {
-            let resp = tokio::time::timeout(timeout, self.recv())
+            let resp = tokio::time::timeout(RPC_TIMEOUT, self.recv())
                 .await
-                .map_err(|_| anyhow::anyhow!("Timeout waiting for response to {}", method))??;
+                .map_err(|_| anyhow::anyhow!("Timeout waiting for response"))??;
 
-            // Final response has matching id
-            if resp.get("id").and_then(|v| v.as_i64()) == Some(id) {
-                if let Some(error) = resp.get("error") {
-                    if !error.is_null() {
-                        let msg = error["message"].as_str().unwrap_or("Unknown error");
-                        let code = error["code"].as_i64().unwrap_or(0);
-                        anyhow::bail!("RPC error ({}): {}", code, msg);
-                    }
+            // Error response
+            if let Some(error) = resp.get("error") {
+                if !error.is_null() {
+                    let msg = error["message"].as_str().unwrap_or("Unknown error");
+                    let code = error["code"].as_i64().unwrap_or(0);
+                    anyhow::bail!("Error ({}): {}", code, msg);
                 }
-                let result = resp.get("result").cloned().unwrap_or(json!({}));
-
-                // Streaming response — return collected text
-                if result.get("stopReason").is_some() {
-                    return Ok(json!({
-                        "stopReason": result["stopReason"],
-                        "text": text_parts.join("")
-                    }));
-                }
-                return Ok(result);
             }
 
-            // Collect streaming notifications
-            if resp.get("method").and_then(|v| v.as_str()) == Some("session/update") {
-                if let Some(update) = resp.pointer("/params/update") {
-                    if update.get("sessionUpdate").and_then(|v| v.as_str()) == Some("agent_message_chunk") {
-                        if let Some(text) = update.pointer("/content/text").and_then(|v| v.as_str()) {
-                            text_parts.push(text.to_string());
-                            print!("{}", text);
-                            std::io::stdout().flush()?;
-                        }
-                    }
+            // Final response: has result with stopReason, or has matching id
+            let is_final = resp.get("result")
+                .and_then(|r| r.get("stopReason"))
+                .is_some()
+                || resp.get("id").and_then(|v| v.as_i64()) == Some(id);
+
+            if is_final {
+                let result = resp.get("result").cloned().unwrap_or(json!({}));
+                return Ok(json!({
+                    "stopReason": result.get("stopReason").unwrap_or(&json!("endTurn")),
+                    "text": text_parts.join(""),
+                    "sessionId": result.get("sessionId").unwrap_or(&json!(null))
+                }));
+            }
+
+            // Collect chunk notifications
+            if resp.get("method").and_then(|v| v.as_str()) == Some("chunk") {
+                if let Some(text) = resp.pointer("/params/text").and_then(|v| v.as_str()) {
+                    text_parts.push(text.to_string());
+                    print!("{}", text);
+                    std::io::stdout().flush()?;
                 }
             }
         }
@@ -227,7 +239,6 @@ async fn read_line<R: AsyncBufReadExt + Unpin>(reader: &mut R) -> anyhow::Result
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-
     let parsed = AgentUrl::parse(&cli.url)?;
 
     if cli.verbose {
@@ -236,44 +247,7 @@ async fn main() -> anyhow::Result<()> {
 
     let mut conn = Connection::connect(&parsed).await?;
 
-    // 1. Initialize
-    let mut init_params = json!({
-        "protocolVersion": "1",
-        "clientInfo": {"name": "agc", "version": env!("CARGO_PKG_VERSION")}
-    });
-    if let Some(ref token) = cli.token {
-        // Put token in both _meta (standard) and top-level (relay compat)
-        init_params["_meta"] = json!({"authToken": token});
-        init_params["authToken"] = json!(token);
-    }
-    let init_result = conn.rpc("initialize", init_params).await?;
-    let authenticated = init_result
-        .get("authenticated")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-    if cli.verbose {
-        eprintln!("[agc] Initialized (authenticated: {})", authenticated);
-    }
-    if !authenticated && cli.token.is_some() {
-        anyhow::bail!("Authentication failed. Check your token.");
-    }
-
-    // 2. Create session
-    let mut session_params = json!({});
-    if let Some(ref agent) = parsed.agent {
-        session_params["_meta"] = json!({"aginx/agentId": agent});
-    }
-    if let Some(ref cwd) = cli.cwd {
-        session_params["cwd"] = json!(cwd);
-    }
-    session_params["mcpServers"] = json!([]);
-    let session_result = conn.rpc("session/new", session_params).await?;
-    let session_id = session_result["sessionId"].as_str().unwrap_or("unknown");
-    if cli.verbose {
-        eprintln!("[agc] Session: {}", session_id);
-    }
-
-    // 3. Send prompt
+    // Get message
     let message = match cli.message {
         Some(msg) => msg,
         None => {
@@ -292,16 +266,15 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let result = conn
-        .rpc(
-            "session/prompt",
-            json!({
-                "sessionId": session_id,
-                "prompt": [{"type": "text", "text": message}]
-            }),
+        .prompt(
+            parsed.agent.as_deref(),
+            &message,
+            cli.token.as_deref(),
+            cli.cwd.as_deref(),
         )
         .await?;
 
-    // Only print trailing newline if streaming text doesn't already end with one
+    // Trailing newline
     if let Some(text) = result.get("text").and_then(|v| v.as_str()) {
         if !text.ends_with('\n') {
             println!();

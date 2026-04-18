@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>一个命令，访问任何 AI Agent</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
+            font-size: 16px;
+            line-height: 1.8;
+            color: #333;
+            background-color: #f8f8f8;
+            padding: 20px;
+            max-width: 680px;
+            margin: 0 auto;
+        }
+        
+        .article-container {
+            background-color: #fff;
+            padding: 30px 25px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        
+        .article-header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .article-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: #1a1a1a;
+            line-height: 1.4;
+            margin-bottom: 15px;
+        }
+        
+        .article-subtitle {
+            font-size: 15px;
+            color: #888;
+        }
+        
+        .article-content {
+            text-align: left;
+        }
+        
+        h2 {
+            font-size: 22px;
+            color: #1a1a1a;
+            margin: 30px 0 15px 0;
+            padding-left: 15px;
+            border-left: 4px solid #07c160;
+        }
+        
+        h3 {
+            font-size: 18px;
+            color: #333;
+            margin: 25px 0 12px 0;
+            font-weight: 600;
+        }
+        
+        p {
+            margin: 15px 0;
+            text-align: justify;
+        }
+        
+        .highlight-box {
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f7ef 100%);
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            border-left: 4px solid #07c160;
+        }
+        
+        .highlight-box p {
+            margin: 8px 0;
+        }
+        
+        code {
+            font-family: "SF Mono", "Fira Code", Consolas, monospace;
+            background-color: #f6f8fa;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 14px;
+            color: #e83e8c;
+        }
+        
+        pre {
+            background-color: #282c34;
+            color: #abb2bf;
+            padding: 15px 18px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 15px 0;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        
+        pre code {
+            background: none;
+            padding: 0;
+            color: #abb2bf;
+            font-size: 14px;
+        }
+        
+        .command {
+            color: #98c379;
+        }
+        
+        .string {
+            color: #e5c07b;
+        }
+        
+        .comment {
+            color: #5c6370;
+            font-style: italic;
+        }
+        
+        ul, ol {
+            margin: 15px 0;
+            padding-left: 25px;
+        }
+        
+        li {
+            margin: 8px 0;
+        }
+        
+        .emphasis {
+            color: #07c160;
+            font-weight: 600;
+        }
+        
+        .divider {
+            height: 1px;
+            background: linear-gradient(to right, transparent, #ddd, transparent);
+            margin: 30px 0;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            color: #888;
+            font-size: 14px;
+        }
+        
+        .footer a {
+            color: #07c160;
+            text-decoration: none;
+        }
+        
+        blockquote {
+            background-color: #f9f9f9;
+            border-left: 4px solid #07c160;
+            padding: 15px 20px;
+            margin: 20px 0;
+            color: #555;
+            font-style: italic;
+        }
+        
+        strong {
+            color: #1a1a1a;
+            font-weight: 600;
+        }
+        
+        @media (max-width: 480px) {
+            body {
+                padding: 10px;
+            }
+            
+            .article-container {
+                padding: 20px 15px;
+            }
+            
+            .article-title {
+                font-size: 24px;
+            }
+            
+            pre {
+                padding: 12px;
+                font-size: 13px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="article-container">
+        <header class="article-header">
+            <h1 class="article-title">一个命令，访问任何 AI Agent</h1>
+            <p class="article-subtitle">agc：像 curl 一样简单</p>
+        </header>
+        
+        <article class="article-content">
+            <h2>一切从一个命令开始</h2>
+            
+            <p>1998 年，curl 诞生。从那以后，访问任何网站只需要一行命令：</p>
+            
+            <pre><code><span class="command">curl</span> <span class="string">https://example.com</span></code></pre>
+            
+            <p>二十七年后，AI Agent 已经无处不在——Claude、Copilot、Gemini、Cursor……但它们各自为政，没有统一的访问方式。你想调用一个 Agent，要先装它的客户端、学它的 SDK、调它的 API。</p>
+            
+            <div class="highlight-box">
+                <p>今天，这件事变得和 <code>curl</code> 一样简单：</p>
+                <pre><code><span class="command">agc</span> <span class="string">agent://abc123.relay.example.com/claude "hello"</span></code></pre>
+                <p style="margin-top: 12px; font-weight: 600;"><strong>agc</strong>——Agent Protocol Client，一行命令访问任何 Agent。</p>
+            </div>
+            
+            <div class="divider"></div>
+            
+            <h2>怎么用</h2>
+            
+            <h3>安装</h3>
+            <pre><code><span class="command">cargo install</span> <span class="string">aginx-cli</span></code></pre>
+            
+            <h3>访问一个 Agent</h3>
+            <pre><code><span class="command">agc</span> <span class="string">agent://abc123.relay.example.com/copilot "帮我写一个快速排序"</span></code></pre>
+            
+            <h3>指定工作目录</h3>
+            <pre><code><span class="command">agc --cwd</span> <span class="string">/my/project</span> <span class="command">agent://abc123.relay.example.com/claude "修复这个 bug"</span></code></pre>
+            
+            <h3>管道输入</h3>
+            <pre><code><span class="command">cat</span> <span class="string">error.log</span> <span class="command">| agc</span> <span class="string">agent://abc123.relay.example.com/claude</span></code></pre>
+            
+            <p>就这么简单。不需要 SDK，不需要 API Key，不需要装任何客户端。只要有一个 <code>agent://</code> 地址，一行命令就能对话。</p>
+            
+            <div class="divider"></div>
+            
+            <h2>agent:// 是什么</h2>
+            
+            <p>你可能注意到了，agc 使用的不是 <code>http://</code>，而是 <span class="emphasis">agent://</span>。</p>
+            
+            <p>这不是噱头。就像 <code>http://</code> 定义了访问网站的方式，<code>agent://</code> 定义了访问 Agent 的方式：</p>
+            
+            <pre><code><span class="string">agent://</span>&lt;id&gt;.relay.example.com/&lt;agent&gt;    → 通过中继访问（TLS 加密）
+<span class="string">agent://</span>192.168.1.100:86/&lt;agent&gt;          → 直连访问</code></pre>
+            
+            <p><strong>URL 即协议。</strong>看到地址就知道怎么连、连到哪、用哪个 Agent。不需要文档，不需要配置文件。</p>
+            
+            <div class="divider"></div>
+            
+            <h2>为什么这件事重要</h2>
+            
+            <h3>1. Agent 需要一个互联网</h3>
+            
+            <p>今天的 AI Agent 像上世纪 90 年代初的网站——每个都独立存在，彼此不互通。你想用 Claude，要打开 Claude；想用 Copilot，要打开 VS Code。</p>
+            
+            <p>但 Agent 不应该只是给人用的工具。Agent 之间需要互相调用、互相协作。一个 Agent 可以调用另一个 Agent 完成子任务，就像一个网站调用另一个网站的 API。</p>
+            
+            <p>这需要一个基础设施——<span class="emphasis">Agent 互联网</span>。</p>
+            
+            <h3>2. 统一协议的意义</h3>
+            
+            <p>回顾互联网的历史，真正让网络爆发的是统一协议：</p>
+            
+            <ul>
+                <li><strong>TCP/IP</strong> 统一了网络层——任何设备都可以互联</li>
+                <li><strong>HTTP</strong> 统一了应用层——任何网站都可以被访问</li>
+                <li><strong>HTML</strong> 统一了表现层——任何内容都可以被渲染</li>
+            </ul>
+            
+            <p>Agent 时代需要同样的统一。Aginx 定义的 ACP（Agent Communication Protocol）就是这个意图——任何 Agent 都说同一种语言，就像任何网站都说 HTTP。</p>
+            
+            <h3>3. 从工具到生态</h3>
+            
+            <p>curl 之所以伟大，不是因为它能发 HTTP 请求，而是因为它让任何人都能在一行命令里触达整个 Web。它降低了访问的门槛，让 Web API 真正成为基础设施。</p>
+            
+            <p>agc 想做同样的事。当访问任何 Agent 只需要一行命令时：</p>
+            
+            <ul>
+                <li><strong>开发者</strong>可以用脚本编排 Agent 工作流</li>
+                <li><strong>Agent</strong> 可以调用其他 Agent，形成协作网络</li>
+                <li><strong>企业</strong>可以部署私有 Agent，像内网网站一样被访问</li>
+                <li><strong>任何人</strong>都可以发布自己的 Agent，让全世界都能用到</li>
+            </ul>
+            
+            <h3>4. 去中心化的 Agent 网络</h3>
+            
+            <p>Aginx 的架构 deliberately 去中心化：</p>
+            
+            <ul>
+                <li>每个 aginx 实例是一个"服务器"，上面的 Agent 是"网站"</li>
+                <li>aginx-relay 做中继穿透，但只转发消息，不存储数据</li>
+                <li>Agent 可以在本地运行，也可以在云上运行</li>
+                <li>任何人都可以部署自己的 aginx，发布自己的 Agent</li>
+            </ul>
+            
+            <blockquote>
+                这不是一个平台，是一个协议。不是一个 App Store，是一个开放网络。
+            </blockquote>
+            
+            <div class="divider"></div>
+            
+            <h2>agc 是第一步</h2>
+            
+            <p>agc 是 Aginx 生态的第一个用户端工具。它很简洁——几百行 Rust 代码，只做一件事：连接 agent://，发消息，收回复。</p>
+            
+            <p>但这一步的意义在于：<span class="emphasis">它证明了 Agent 可以像网站一样被访问。</span></p>
+            
+            <div class="highlight-box">
+                <pre><code><span class="command">curl</span> <span class="string">https://www.google.com</span>       <span class="comment"># 访问网站</span>
+<span class="command">agc</span>  <span class="string">agent://abc.example.com/claude</span>  <span class="comment"># 访问 Agent</span></code></pre>
+            </div>
+            
+            <p>当访问 Agent 和访问网站一样简单时，Agent 互联网就真的开始了。</p>
+            
+            <div class="divider"></div>
+            
+            <div class="footer">
+                <p><strong>agc</strong> 已在 crates.io 发布</p>
+                <p style="margin-top: 8px;"><code>cargo install aginx-cli</code></p>
+                <p style="margin-top: 12px;">开源地址：<a href="https://github.com/yinnho/agc">github.com/yinnho/agc</a></p>
+            </div>
+        </article>
+    </div>
+</body>
+</html>
