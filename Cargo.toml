@@ -3,6 +3,10 @@ name = "aginx-cli"
 version = "0.1.0"
 edition = "2021"
 description = "Agent protocol client CLI — curl for agent://"
+license = "MIT"
+repository = "https://github.com/yinnho/agc"
+keywords = ["agent", "cli", "aginx", "ai"]
+categories = ["command-line-utilities"]
 
 [[bin]]
 name = "agc"
