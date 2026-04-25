@@ -115,6 +115,41 @@ impl Connection {
         Ok(conn)
     }
 
+    /// Send initialize handshake (with optional auth token)
+    async fn initialize(&mut self, token: Option<&str>) -> anyhow::Result<Value> {
+        let id = next_id();
+
+        let mut params = json!({
+            "protocolVersion": "0.1.0",
+            "clientInfo": {"name": "agc", "version": "0.2.0"}
+        });
+
+        if let Some(token) = token {
+            params["_meta"] = json!({"authToken": token});
+        }
+
+        self.send(json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": "initialize",
+            "params": params
+        }))
+        .await?;
+
+        let resp = tokio::time::timeout(RPC_TIMEOUT, self.recv())
+            .await
+            .map_err(|_| anyhow::anyhow!("Timeout waiting for initialize response"))??;
+
+        if let Some(error) = resp.get("error") {
+            if !error.is_null() {
+                let msg = error["message"].as_str().unwrap_or("Unknown error");
+                anyhow::bail!("Initialize error: {}", msg);
+            }
+        }
+
+        Ok(resp)
+    }
+
     async fn send(&mut self, msg: Value) -> anyhow::Result<()> {
         let mut data = serde_json::to_string(&msg)?;
         data.push('\n');
@@ -157,7 +192,7 @@ impl Connection {
     }
 
     /// Send a prompt and collect streaming response
-    async fn prompt(&mut self, agent: Option<&str>, message: &str, token: Option<&str>, cwd: Option<&str>) -> anyhow::Result<Value> {
+    async fn prompt(&mut self, agent: Option<&str>, message: &str, cwd: Option<&str>) -> anyhow::Result<Value> {
         let id = next_id();
 
         let mut params = json!({
@@ -166,9 +201,6 @@ impl Connection {
 
         if let Some(agent) = agent {
             params["agent"] = json!(agent);
-        }
-        if let Some(token) = token {
-            params["token"] = json!(token);
         }
         if let Some(cwd) = cwd {
             params["cwd"] = json!(cwd);
@@ -247,6 +279,12 @@ async fn main() -> anyhow::Result<()> {
 
     let mut conn = Connection::connect(&parsed).await?;
 
+    // Initialize with optional auth token
+    if cli.verbose {
+        eprintln!("[agc] Initializing...");
+    }
+    conn.initialize(cli.token.as_deref()).await?;
+
     // Get message
     let message = match cli.message {
         Some(msg) => msg,
@@ -269,7 +307,6 @@ async fn main() -> anyhow::Result<()> {
         .prompt(
             parsed.agent.as_deref(),
             &message,
-            cli.token.as_deref(),
             cli.cwd.as_deref(),
         )
         .await?;
